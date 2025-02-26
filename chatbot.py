@@ -8,7 +8,6 @@ app = FastAPI()
 
 model = app_model.AppModel()
 cmodel = chatbot_model.ChatbotModel()
-cmodel1 = chatbot_model1.ChatbotModel()
 
 @app.get("/chat")
 def chat(text: str = Query(), user: str = Query()):
