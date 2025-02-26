@@ -1,0 +1,11 @@
+fastapi[all]
+numpy
+langchain-community
+langgraph
+langchain-anthropic
+tavily-python
+langgraph-checkpoint-sqlite
+langchain-core
+langgraph>0.2.27
+langchain[openai]
+dotenv
