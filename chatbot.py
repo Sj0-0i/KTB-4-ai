@@ -11,6 +11,6 @@ cmodel = chatbot_model.ChatbotModel()
 
 @app.get("/chat")
 def chat(text: str = Query(), user: str = Query()):
-    response = cmodel.get_response(user, 'Korean', text)
-    return {"content" :response.content}
+    response = cmodel.get_response(user, text)
+    return {"content" :response}
 
