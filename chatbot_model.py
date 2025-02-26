@@ -1,30 +1,32 @@
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, StateGraph
-from langchain_core.messages import trim_messages
+from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
+from langgraph.checkpoint.memory import MemorySaver  
+from langgraph.graph import START, MessagesState, StateGraph
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from typing import Sequence
-from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from typing_extensions import Annotated, TypedDict
+from langchain_community.chat_message_histories import SQLChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_openai import ChatOpenAI
 
+# 환경 변수 로딩
+load_dotenv()
 
-
-class State(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-    language: str
 
 class ChatbotModel:
-  def __init__(self):
-    load_dotenv() 
-    model = init_chat_model("gpt-4o-mini", model_provider="openai")
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """
+    class State(TypedDict):
+        messages: Annotated[Sequence[BaseMessage], add_messages]
+        language: str
+
+    def __init__(self, model_name="gpt-4o-mini", model_provider="openai"):
+        self.model = init_chat_model(model_name, model_provider=model_provider)
+        self.llm = ChatOpenAI(model_name=model_name)
+
+        self.prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("system",  """
                 당신은 친절한 어시스턴트입니다. 
                 시니어가 이해하기 쉽게 짧고 간결하게 답변해주세요.
                 나의 성별은 남성 이고
@@ -32,46 +34,67 @@ class ChatbotModel:
                 나의 거주지는 대한민국 판교 유스페이스1 A동이고
                 나의 취미는 운동이야
                 나의 나이에 맞는 답변을 해줘
-                """,
-            ),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
-    trimmer = trim_messages(
-        max_tokens=65,
-        strategy="last",
-        token_counter=model,
-        include_system=True,
-        allow_partial=False,
-        start_on="human",
-    )
-    workflow = StateGraph(state_schema=State)
-
-    def call_model(state: State):
-        trimmed_messages = trimmer.invoke(state["messages"])
-        prompt = prompt_template.invoke(
-            {"messages": trimmed_messages, "language": state["language"]}
+                """),
+                MessagesPlaceholder(variable_name="history"),
+                ("human", "{question}"),
+            ]
         )
-        response = model.invoke(prompt)
-        return {"messages": response}
+
+        self.memory = MemorySaver()
+        self.chat_message_history = SQLChatMessageHistory(
+            session_id="test_session_id", connection_string="sqlite:///sqlite.db"
+        )
+
+        self.workflow = self._build_workflow()
+        self.app = self.workflow.compile(checkpointer=self.memory)
+
+        self.chain = self.prompt_template | self.llm  
+        self.chain_with_history = RunnableWithMessageHistory(
+            self.chain,
+            lambda session_id: SQLChatMessageHistory(session_id=session_id, connection_string="sqlite:///sqlite.db"),
+            input_messages_key="question",
+            history_messages_key="history",
+        )
+
+    def _build_workflow(self):
+        workflow = StateGraph(state_schema=self.State)
+        workflow.add_node("model", self._call_model)
+        workflow.add_edge(START, "model")
+        return workflow
+
+    def _call_model(self, state: State):
+        past_messages = self.chat_message_history.messages  # 대화 기록 리스트
+        all_messages = past_messages + state["messages"]
+
+        last_human_message = next((msg.content for msg in reversed(all_messages) if isinstance(msg, HumanMessage)), None)
+        if last_human_message is None:
+            last_human_message = "Hello, how can I help you?"  # 기본 질문 설정
+
+        prompt = self.prompt_template.invoke({
+            "history": all_messages,
+            "question": last_human_message,  
+        })
+        response = self.model.invoke(prompt)
+
+        return {"messages": all_messages + [response]}
+
+
+    def translate(self, text: str, language: str, session_id: str = "default_thread"):
+        input_messages = [HumanMessage(text)]
+        config = {"configurable": {"thread_id": session_id}}
+        self.chat_message_history.add_user_message(text)
+        output = self.app.invoke({"messages": input_messages, "language": language}, config)
+        ai_response = output["messages"][-1].content
+        self.chat_message_history.add_ai_message(ai_response)
+
+        return ai_response
     
-    workflow.add_edge(START, "model")
-    workflow.add_node("model", call_model)
-    memory = MemorySaver()
-    self.app = workflow.compile(checkpointer=memory)
-
-    self.messages = []
-
-
-  def get_response(self, thread_id, language, message):
-    config = {"configurable": {"thread_id": thread_id}}
-    input_messages = self.messages + [HumanMessage(message)]
-    output = self.app.invoke(
-        {"messages": input_messages, "language": language},
-        config,
-    )
-
-    # print(self.messages)
-    return output["messages"][-1]
-  
-
+    def get_response(self, session_id, message):
+        config = {"configurable": {"thread_id": session_id}}
+        input_messages = [HumanMessage(message)]
+        self.chat_message_history.add_user_message(message)
+        output = self.app.invoke({"messages": input_messages}, config)
+        ai_response = output["messages"][-1].content
+        self.chat_message_history.add_ai_message(ai_response)
+        # print(self.messages)
+        return ai_response
