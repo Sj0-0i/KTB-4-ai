@@ -16,6 +16,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: set .env
+        run: | 
+          echo ${{ secrets.DOT_ENV }} >> ./.env
+
       - name: Debug DOCKERHUB_REPO
         run: |
           echo "DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}"
