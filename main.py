@@ -5,7 +5,6 @@ from typing import List
 
 
 from app import chatbot_model
-from app.user_service import save_user_data
 
 cmodel = chatbot_model.ChatbotModel()
 
@@ -27,7 +26,7 @@ class UserData(BaseModel):
 
 @app.post("/user")
 def setUserData(request: UserData):
-    save_user_data(user_data=request)
+    cmodel.get_user_info(request.id, request.age, request.like)
     return {"message": "User data received", "data": request}
 
 

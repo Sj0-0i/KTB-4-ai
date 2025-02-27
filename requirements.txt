@@ -10,3 +10,7 @@ langchain-core
 langgraph>0.2.27
 langchain[openai]
 dotenv
+pydantic
+python-dotenv
+openai
+typing-extensions
