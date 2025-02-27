@@ -198,3 +198,6 @@ def save_chat_message(request: ChatMessage):
     conn.close()
 
     return {"status": "success", "message": "Chat message saved"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
