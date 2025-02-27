@@ -51,9 +51,6 @@ jobs:
             echo "Stopping existing chatbot container..."
             docker-compose stop chatbot || true
             
-            echo "Updating .env file..."
-            echo "${{ secrets.ENV_FILE }}" > .env
-            
             echo "Pulling latest image..."
             docker pull ${{ secrets.DOCKERHUB_REPO }}/chatbot:latest
             
