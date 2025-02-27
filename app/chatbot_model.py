@@ -1,3 +1,4 @@
+import json
 import os
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -6,6 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from typing import Sequence
+import pymysql
 from langgraph.graph.message import add_messages
 from typing_extensions import Annotated, TypedDict
 from langchain_community.chat_message_histories import SQLChatMessageHistory
@@ -24,7 +26,22 @@ DB_PORT = int(os.getenv("DB_PORT", 3306))
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
-
+# MySQL 연결 함수
+def get_db_connection():
+    try:
+        conn = pymysql.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        print("DB 연결 성공")
+        return conn
+    except Exception as e:
+        print(f"DB 연결 실패: {e}")
+        return None
 
 class ChatbotModel:
     class State(TypedDict):
@@ -64,7 +81,7 @@ class ChatbotModel:
             self.chain,
             lambda session_id: SQLChatMessageHistory(
                 session_id=session_id, 
-                connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+                connection_string=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
             ),
             input_messages_key="question",
             history_messages_key="history",
@@ -77,49 +94,144 @@ class ChatbotModel:
         return workflow
 
     def _call_model(self, state: State):
+        """LLM 모델 호출 및 응답 생성 함수"""
         if self.chat_message_history is None:
             return {"messages": ["Session ID가 설정되지 않았습니다."]}
+
+        # 현재 세션 ID에 대한 사용자 정보가 없는 경우 DB에서 로드 시도
+        if self.session_id and (self.age is None or self.like is None):
+            self._load_user_info_from_db(self.session_id)
 
         past_messages = self.chat_message_history.messages  # 대화 기록 리스트
         all_messages = past_messages + state["messages"]
 
-        last_human_message = next((msg.content for msg in reversed(all_messages) if isinstance(msg, HumanMessage)), None)
+        last_human_message = next((msg.content for msg in reversed(all_messages) if isinstance(msg, HumanMessage)),
+                                  None)
         if last_human_message is None:
             last_human_message = "Hello, how can I help you?"  # 기본 질문 설정
+
+        # 사용자 정보 기본값 설정
+        age_value = self.age if self.age is not None else "알 수 없음"
+        like_value = self.like if self.like is not None else "알 수 없음"
+
+        # 디버깅을 위한 로그
+        print(f"프롬프트에 포함되는 사용자 정보 - 나이: {age_value}, 관심사: {like_value}")
 
         prompt = self.prompt_template.invoke({
             "history": all_messages,
             "question": last_human_message,
-            "age": self.age,
-            "like": self.like,  
+            "age": age_value,
+            "like": like_value,
         })
         response = self.model.invoke(prompt)
 
         return {"messages": all_messages + [response]}
-
     def get_response(self, session_id, message):
         """ 세션 ID를 기반으로 사용자 입력에 대한 챗봇 응답을 반환 """
         if self.session_id != session_id:
             self.session_id = session_id
             self.chat_message_history = SQLChatMessageHistory(
-                session_id=self.session_id, 
-                connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+                session_id=self.session_id,
+                connection_string=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
             )
 
-        config = {"configurable": {"thread_id": session_id}}
-        input_messages = [HumanMessage(message)]
-        self.chat_message_history.add_user_message(message)
-        output = self.app.invoke({"messages": input_messages}, config)
-        ai_response = output["messages"]
-        self.chat_message_history.add_ai_message(ai_response)
+            # 세션 ID가 변경되면 DB에서 사용자 정보 로드
+            self._load_user_info_from_db(session_id)
 
-        return ai_response
-    
+        # 이미 로드된 사용자 정보가 없으면 다시 로드 시도
+        if self.age is None or self.like is None:
+            self._load_user_info_from_db(session_id)
+
+        config = {"configurable": {"thread_id": session_id}}
+        input_messages = [HumanMessage(content=message)]
+        self.chat_message_history.add_user_message(message)
+
+        try:
+            output = self.app.invoke({"messages": input_messages}, config)
+            ai_response = output["messages"]
+
+            # 마지막 메시지가 AI 응답인 경우
+            if ai_response and isinstance(ai_response[-1], AIMessage):
+                response_content = ai_response[-1].content
+                self.chat_message_history.add_ai_message(response_content)
+                return response_content
+            else:
+                # 응답 형식이 예상과 다른 경우 안전하게 문자열 변환
+                response_text = str(ai_response)
+                self.chat_message_history.add_ai_message(response_text)
+                return response_text
+        except Exception as e:
+            error_msg = f"응답 생성 중 오류 발생: {str(e)}"
+            print(error_msg)
+            return error_msg
+
+    def _load_user_info_from_db(self, session_id):
+        """DB에서 사용자 정보를 로드하는 헬퍼 함수"""
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = "SELECT age, likes FROM user_info WHERE session_id = %s"
+                cursor.execute(query, (session_id,))
+                user_info = cursor.fetchone()
+
+                if user_info:
+                    self.age = user_info['age']
+                    # likes 필드가 JSON 문자열이라면 파싱
+                    if user_info['likes']:
+                        try:
+                            self.like = json.loads(user_info['likes'])
+                        except json.JSONDecodeError:
+                            # JSON 파싱 실패 시 그대로 사용
+                            self.like = user_info['likes']
+                    else:
+                        self.like = None
+
+                    print(f"사용자 정보 로드 성공 - 나이: {self.age}, 관심사: {self.like}")
+                else:
+                    print(f"세션 ID {session_id}에 대한 사용자 정보가 없습니다.")
+                    self.age = None
+                    self.like = None
+
+                cursor.close()
+                conn.close()
+        except Exception as e:
+            print(f"사용자 정보 로드 중 오류 발생: {e}")
+            self.age = None
+            self.like = None
+
+    # get_user_info 함수 수정 - DB에 사용자 정보 저장
     def get_user_info(self, session_id, age, like):
-        """ 사용자 정보를 설정하고 이후 대화에서 활용 """
-        self.session_id = session_id  # 기존 userId → session_id로 변경
+        """ 사용자 정보를 DB에 저장하고 이후 대화에서 활용 """
+        self.session_id = session_id
         self.age = age
         self.like = like
+
+        # DB에 사용자 정보 저장
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # 기존 사용자 정보가 있는지 확인
+            check_query = "SELECT * FROM user_info WHERE session_id = %s"
+            cursor.execute(check_query, (session_id,))
+            existing_user = cursor.fetchone()
+
+            if existing_user:
+                # 기존 사용자 정보 업데이트
+                update_query = "UPDATE user_info SET age = %s, likes = %s WHERE session_id = %s"
+                cursor.execute(update_query, (age, json.dumps(like), session_id))
+            else:
+                # 새 사용자 정보 추가
+                insert_query = "INSERT INTO user_info (session_id, age, likes) VALUES (%s, %s, %s)"
+                cursor.execute(insert_query, (session_id, age, json.dumps(like)))
+
+            conn.commit()
+        except Exception as e:
+            print(f"사용자 정보 저장 중 오류 발생: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     async def get_stream_response(self, user_id, message):
         response = self.get_response(user_id, message)
@@ -131,7 +243,7 @@ class ChatbotModel:
         # 채팅 기록 초기화 (MySQL 연결)
         self.chat_message_history = SQLChatMessageHistory(
             session_id=self.session_id,
-            connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            connection_string=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
         )
 
     async def text_to_speech(self, text):
