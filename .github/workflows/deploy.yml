@@ -1,7 +1,7 @@
 name: CI/CD for FastAPI Chatbot
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
@@ -20,11 +20,21 @@ jobs:
         run: |
           echo "DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}"
 
-      - name: Docker build & push to DockerHub
+      - name: Login to Docker Hub
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker build -t "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/chatbot:latest" .
-          docker push "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/chatbot:latest"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker build & push to DockerHub
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --cache-from=type=registry,ref=${{ secrets.DOCKERHUB_REPO }}/chatbot:cache \
+            --cache-to=type=registry,ref=${{ secrets.DOCKERHUB_REPO }}/chatbot:cache,mode=max \
+            -t ${{ secrets.DOCKERHUB_REPO }}/chatbot:latest \
+            --push .
 
   deploy:
     needs: build-and-push
@@ -39,14 +49,13 @@ jobs:
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             echo "Stopping existing chatbot container..."
-            docker-compose stop chatbot
-            docker-compose rm -f chatbot
-            
-            echo "Pulling latest image..."
-            docker pull ${{ secrets.DOCKERHUB_REPO }}/chatbot:latest
+            docker-compose stop chatbot || true
             
             echo "Updating .env file..."
             echo "${{ secrets.ENV_FILE }}" > .env
+            
+            echo "Pulling latest image..."
+            docker pull ${{ secrets.DOCKERHUB_REPO }}/chatbot:latest
             
             echo "Restarting chatbot services..."
             docker-compose up -d chatbot
