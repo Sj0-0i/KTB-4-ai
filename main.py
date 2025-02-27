@@ -3,7 +3,7 @@ import pymysql
 import os
 import json
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi import FastAPI, WebSocket
@@ -72,10 +72,22 @@ class UserData(BaseModel):
     age: int
     like: List[str]
 
+@app.options("/chat")
+async def options_chat(request: Request):
+    return JSONResponse(content=None, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    })
+
+
 @app.post("/chat")
 def chat(request: ChatRequest):
     response = cmodel.get_response(request.userId, request.message)
-    return {"content": response}
+    return JSONResponse(
+        content={"content": response},
+        headers={"Access-Control-Allow-Origin": "*"}  # 명시적 허용
+    )
 
 @app.post("/user")
 def setUserData(request: UserData):
