@@ -19,13 +19,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Debug DOCKERHUB_REPO
+        run: |
+          echo "DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}"
+
       - name: Docker build & push to DockerHub
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker build -f Dockerfile -t ${{ secrets.DOCKERHUB_REPO}}/app-back:latest .
-          docker push ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
+          docker build -t "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest" .
+          docker push "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest"
 
-  deploy:
+
+deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
 
