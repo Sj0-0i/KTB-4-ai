@@ -14,3 +14,4 @@ pydantic
 python-dotenv
 openai
 typing-extensions
+pydub

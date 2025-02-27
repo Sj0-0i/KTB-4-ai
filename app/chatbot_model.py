@@ -10,6 +10,8 @@ from typing_extensions import Annotated, TypedDict
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import ChatOpenAI
+import openai
+import os
 
 # 환경 변수 로딩
 load_dotenv()
@@ -23,7 +25,7 @@ class ChatbotModel:
     def __init__(self, model_name="gpt-4o-mini", model_provider="openai"):
         self.model = init_chat_model(model_name, model_provider=model_provider)
         self.llm = ChatOpenAI(model_name=model_name)
-
+        self.model_name = model_name
         self.age = None
         self.like = None
 
@@ -96,3 +98,10 @@ class ChatbotModel:
         self.userId = userId #데이터베이스에서 저장하고 이후에 채팅 시 사용.
         self.age = age
         self.like = like
+
+    async def get_stream_response(self, user_id, message):
+        response = await self.get_response(user_id, message)
+
+        async for chunk in response:
+            if "choices" in chunk and chunk["choices"]:
+                yield chunk["choices"][0]["delta"]["content"]
