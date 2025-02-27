@@ -16,3 +16,15 @@ class ChatRequest(BaseModel):
 def chat(request: ChatRequest):
     response = cmodel.get_response(request.user, request.text)
     return {"content": response}
+
+
+# 사용자 정보 입력용 
+class UserInfo(BaseModel):
+    age: int
+    hobby: str
+
+@app.post("/set_user_info")
+def set_user_info(user_info: UserInfo):
+    # 올바르게 user_info의 값을 전달
+    cmodel.get_user_info(user_info.age, user_info.hobby)
+    return {"message": "User information updated successfully"}

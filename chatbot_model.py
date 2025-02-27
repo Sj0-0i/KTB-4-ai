@@ -24,15 +24,16 @@ class ChatbotModel:
         self.model = init_chat_model(model_name, model_provider=model_provider)
         self.llm = ChatOpenAI(model_name=model_name)
 
+        self.age = None
+        self.hobby = None
+
         self.prompt_template = ChatPromptTemplate.from_messages(
             [
                 ("system",  """
                 당신은 친절한 어시스턴트입니다. 
-                시니어가 이해하기 쉽게 짧고 간결하게 답변해주세요.
-                나의 성별은 남성 이고
-                나의 생년월일은 1951년 8월 21일 이야
-                나의 거주지는 대한민국 판교 유스페이스1 A동이고
-                나의 취미는 운동이야
+                시니어가 이해하기 쉽게 짧고 간결하며 친절하게 답변해주세요.
+                나의 나이는 {age}
+                나의 관심사는 {hobby}야
                 나의 나이에 맞는 답변을 해줘
                 """),
                 MessagesPlaceholder(variable_name="history"),
@@ -72,23 +73,15 @@ class ChatbotModel:
 
         prompt = self.prompt_template.invoke({
             "history": all_messages,
-            "question": last_human_message,  
+            "question": last_human_message,
+            "age": self.age,
+            "hobby": self.hobby,  
         })
         response = self.model.invoke(prompt)
 
         return {"messages": all_messages + [response]}
 
 
-    def translate(self, text: str, language: str, session_id: str = "default_thread"):
-        input_messages = [HumanMessage(text)]
-        config = {"configurable": {"thread_id": session_id}}
-        self.chat_message_history.add_user_message(text)
-        output = self.app.invoke({"messages": input_messages, "language": language}, config)
-        ai_response = output["messages"][-1].content
-        self.chat_message_history.add_ai_message(ai_response)
-
-        return ai_response
-    
     def get_response(self, session_id, message):
         config = {"configurable": {"thread_id": session_id}}
         input_messages = [HumanMessage(message)]
@@ -98,3 +91,7 @@ class ChatbotModel:
         self.chat_message_history.add_ai_message(ai_response)
         # print(self.messages)
         return ai_response
+    
+    def get_user_info(self, age, hobby):
+        self.age = age
+        self.hobby = hobby
