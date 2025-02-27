@@ -33,7 +33,7 @@ class ChatbotModel:
                 당신은 친절한 어시스턴트입니다. 
                 시니어가 이해하기 쉽게 짧고 간결하며 친절하게 답변해주세요.
                 나의 나이는 {age}
-                나의 관심사는 {hobby}야
+                나의 관심사는 {like}야
                 나의 나이에 맞는 답변을 해줘
                 """),
                 MessagesPlaceholder(variable_name="history"),
@@ -75,7 +75,7 @@ class ChatbotModel:
             "history": all_messages,
             "question": last_human_message,
             "age": self.age,
-            "hobby": self.hobby,  
+            "like": self.like,  
         })
         response = self.model.invoke(prompt)
 
