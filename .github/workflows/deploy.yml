@@ -1,0 +1,55 @@
+name: CI/CD for FastAPI Chatbot
+
+on:
+  pull_request:
+    branches:
+      - release
+  push:
+    branches:
+      - release
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Docker build & push to DockerHub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker build -f Dockerfile -t ${{ secrets.DOCKERHUB_REPO}}/app-back:latest .
+          docker push ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            echo "Stopping existing Docker container..."
+            docker ps -q | xargs -r docker stop
+            docker ps -q | xargs -r docker rm -f
+            
+            echo "Pulling latest image..."
+            docker pull ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
+            
+            echo "Updating .env file..."
+            echo "${{ secrets.ENV_FILE }}" > .env
+            
+            echo "Restarting services..."
+            docker-compose down
+            docker-compose up -d
+
+            echo "Waiting for FastAPI to start..."
+            sleep 10
