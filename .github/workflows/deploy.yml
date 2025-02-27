@@ -41,9 +41,9 @@ jobs:
             username: ${{ secrets.EC2_USER }}
             key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
             script: |
-              echo "Stopping existing Docker container..."
-              docker ps -q | xargs -r docker stop
-              docker ps -q | xargs -r docker rm -f
+              echo "Stopping existing chatbot container..."
+              docker-compose stop chatbot
+              docker-compose rm -f chatbot
               
               echo "Pulling latest image..."
               docker pull ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
@@ -51,9 +51,8 @@ jobs:
               echo "Updating .env file..."
               echo "${{ secrets.ENV_FILE }}" > .env
               
-              echo "Restarting services..."
-              docker-compose down
-              docker-compose up -d
+              echo "Restarting chatbot services..."
+              docker-compose up -d frontend
   
               echo "Waiting for FastAPI to start..."
               sleep 10
