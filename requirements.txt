@@ -15,3 +15,5 @@ python-dotenv
 openai
 typing-extensions
 pydub
+pymysql
+jsonschema
