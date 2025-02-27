@@ -16,3 +16,5 @@ openai
 typing-extensions
 pydub
 edge_tts
+pymysql
+jsonschema

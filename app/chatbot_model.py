@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
@@ -17,6 +18,13 @@ import io
 # 환경 변수 로딩
 load_dotenv()
 
+# RDS MySQL 연결 정보
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = int(os.getenv("DB_PORT", 3306))
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+
 
 class ChatbotModel:
     class State(TypedDict):
@@ -27,6 +35,7 @@ class ChatbotModel:
         self.model = init_chat_model(model_name, model_provider=model_provider)
         self.llm = ChatOpenAI(model_name=model_name)
         self.model_name = model_name
+        self.session_id = None  # 기존 userId → session_id로 변경
         self.age = None
         self.like = None
 
@@ -45,9 +54,7 @@ class ChatbotModel:
         )
 
         self.memory = MemorySaver()
-        self.chat_message_history = SQLChatMessageHistory(
-            session_id="test_session_id", connection_string="sqlite:///sqlite.db"
-        )
+        self.chat_message_history = None  # `session_id` 설정 후 초기화하도록 변경
 
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile(checkpointer=self.memory)
@@ -55,7 +62,10 @@ class ChatbotModel:
         self.chain = self.prompt_template | self.llm  
         self.chain_with_history = RunnableWithMessageHistory(
             self.chain,
-            lambda session_id: SQLChatMessageHistory(session_id=session_id, connection_string="sqlite:///sqlite.db"),
+            lambda session_id: SQLChatMessageHistory(
+                session_id=session_id, 
+                connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            ),
             input_messages_key="question",
             history_messages_key="history",
         )
@@ -67,6 +77,9 @@ class ChatbotModel:
         return workflow
 
     def _call_model(self, state: State):
+        if self.chat_message_history is None:
+            return {"messages": ["Session ID가 설정되지 않았습니다."]}
+
         past_messages = self.chat_message_history.messages  # 대화 기록 리스트
         all_messages = past_messages + state["messages"]
 
@@ -84,19 +97,27 @@ class ChatbotModel:
 
         return {"messages": all_messages + [response]}
 
-
     def get_response(self, session_id, message):
+        """ 세션 ID를 기반으로 사용자 입력에 대한 챗봇 응답을 반환 """
+        if self.session_id != session_id:
+            self.session_id = session_id
+            self.chat_message_history = SQLChatMessageHistory(
+                session_id=self.session_id, 
+                connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            )
+
         config = {"configurable": {"thread_id": session_id}}
         input_messages = [HumanMessage(message)]
         self.chat_message_history.add_user_message(message)
         output = self.app.invoke({"messages": input_messages}, config)
         ai_response = output["messages"][-1].content
         self.chat_message_history.add_ai_message(ai_response)
-        # print(self.messages)
+
         return ai_response
     
-    def get_user_info(self, userId, age, like):
-        self.userId = userId #데이터베이스에서 저장하고 이후에 채팅 시 사용.
+    def get_user_info(self, session_id, age, like):
+        """ 사용자 정보를 설정하고 이후 대화에서 활용 """
+        self.session_id = session_id  # 기존 userId → session_id로 변경
         self.age = age
         self.like = like
 
@@ -104,6 +125,14 @@ class ChatbotModel:
         response = self.get_response(user_id, message)
         yield self.text_to_speech(response)
         await asyncio.sleep(0.1)
+        async for chunk in response:
+            if "choices" in chunk and chunk["choices"]:
+                yield chunk["choices"][0]["delta"]["content"]
+        # 채팅 기록 초기화 (MySQL 연결)
+        self.chat_message_history = SQLChatMessageHistory(
+            session_id=self.session_id,
+            connection=f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        )
 
     async def text_to_speech(self, text):
         """ TTS를 사용하여 텍스트를 음성으로 변환 (Edge TTS) """
