@@ -18,7 +18,7 @@ jobs:
 
       - name: set .env
         run: | 
-          echo ${{ secrets.DOT_ENV }} >> ./.env
+          echo "${{ secrets.DOT_ENV }}" > .env
 
       - name: Debug DOCKERHUB_REPO
         run: |
