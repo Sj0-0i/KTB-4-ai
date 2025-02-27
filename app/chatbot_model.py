@@ -110,7 +110,7 @@ class ChatbotModel:
         input_messages = [HumanMessage(message)]
         self.chat_message_history.add_user_message(message)
         output = self.app.invoke({"messages": input_messages}, config)
-        ai_response = output["messages"][-1].content
+        ai_response = output["messages"]
         self.chat_message_history.add_ai_message(ai_response)
 
         return ai_response
