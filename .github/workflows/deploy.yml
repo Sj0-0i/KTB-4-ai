@@ -43,13 +43,13 @@ jobs:
             docker-compose rm -f chatbot
             
             echo "Pulling latest image..."
-            docker pull ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
+            docker pull ${{ secrets.DOCKERHUB_REPO }}/chatbot:latest
             
             echo "Updating .env file..."
             echo "${{ secrets.ENV_FILE }}" > .env
             
             echo "Restarting chatbot services..."
-            docker-compose up -d frontend
+            docker-compose up -d chatbot
             
             echo "Waiting for FastAPI to start..."
             sleep 10
