@@ -25,7 +25,7 @@ class ChatbotModel:
         self.llm = ChatOpenAI(model_name=model_name)
 
         self.age = None
-        self.hobby = None
+        self.like = None
 
         self.prompt_template = ChatPromptTemplate.from_messages(
             [
@@ -92,6 +92,6 @@ class ChatbotModel:
         # print(self.messages)
         return ai_response
     
-    def get_user_info(self, age, hobby):
+    def get_user_info(self, age, like):
         self.age = age
-        self.hobby = hobby
+        self.like = like
