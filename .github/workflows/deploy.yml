@@ -31,7 +31,7 @@ jobs:
 
   deploy:
       needs: build-and-push
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
 
       steps:
         - name: Deploy to EC2
