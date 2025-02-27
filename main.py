@@ -71,15 +71,15 @@ class UserData(BaseModel):
     id: str
     age: int
     like: List[str]
-
-@app.options("/chat")
-async def options_chat(request: Request):
-    return JSONResponse(content=None, headers={
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    })
-
+#
+# @app.options("/chat")
+# async def options_chat(request: Request):
+#     return JSONResponse(content=None, headers={
+#         "Access-Control-Allow-Origin": "*",
+#         "Access-Control-Allow-Methods": "POST, OPTIONS",
+#         "Access-Control-Allow-Headers": "Content-Type, Authorization",
+#     })
+#
 
 @app.post("/chat")
 def chat(request: ChatRequest):

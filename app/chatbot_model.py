@@ -126,6 +126,7 @@ class ChatbotModel:
         response = self.model.invoke(prompt)
 
         return {"messages": all_messages + [response]}
+
     def get_response(self, session_id, message):
         """ 세션 ID를 기반으로 사용자 입력에 대한 챗봇 응답을 반환 """
         if self.session_id != session_id:
@@ -144,25 +145,85 @@ class ChatbotModel:
 
         config = {"configurable": {"thread_id": session_id}}
         input_messages = [HumanMessage(content=message)]
-        self.chat_message_history.add_user_message(message)
+
+        # 사용자 메시지 저장 시 예외 처리
+        try:
+            self.chat_message_history.add_user_message(message)
+        except Exception as user_msg_err:
+            print(f"사용자 메시지 저장 실패: {user_msg_err}")
+            # 오류가 발생해도 계속 진행
 
         try:
+            # LLM을 통해 응답 생성
             output = self.app.invoke({"messages": input_messages}, config)
+
+            # output에서 응답 추출
+            if not isinstance(output, dict) or "messages" not in output:
+                return "응답 형식이 올바르지 않습니다."
+
             ai_response = output["messages"]
 
-            # 마지막 메시지가 AI 응답인 경우
-            if ai_response and isinstance(ai_response[-1], AIMessage):
-                response_content = ai_response[-1].content
-                self.chat_message_history.add_ai_message(response_content)
+            # 응답이 없는 경우
+            if not ai_response:
+                return "응답을 생성하는 중 오류가 발생했습니다."
+
+            # 응답이 리스트이고 마지막 항목이 AIMessage인 경우
+            if isinstance(ai_response, list) and ai_response and isinstance(ai_response[-1], AIMessage):
+                final_message = ai_response[-1]
+                response_content = final_message.content
+
+                # 응답 저장 시도
+                try:
+                    self.chat_message_history.add_ai_message(response_content)
+                except Exception as save_err:
+                    print(f"AI 응답 저장 실패: {save_err}")
+
                 return response_content
+
+            # 응답이 문자열인 경우
+            elif isinstance(ai_response, str):
+                try:
+                    self.chat_message_history.add_ai_message(ai_response)
+                except Exception as save_err:
+                    print(f"AI 응답 저장 실패: {save_err}")
+
+                return ai_response
+
+            # 그 외의 경우: 응답 전체를 문자열로 변환
             else:
-                # 응답 형식이 예상과 다른 경우 안전하게 문자열 변환
+                # 마지막 메시지가 있으면 그 내용을 추출
+                if isinstance(ai_response, list) and ai_response:
+                    last_item = ai_response[-1]
+
+                    # 마지막 항목에서 'content' 속성 추출 시도
+                    if hasattr(last_item, 'content'):
+                        response_content = last_item.content
+                        try:
+                            self.chat_message_history.add_ai_message(response_content)
+                        except Exception as save_err:
+                            print(f"AI 응답 저장 실패: {save_err}")
+
+                        return response_content
+
+                # 마지막 수단: 전체 응답을 문자열로 변환
                 response_text = str(ai_response)
-                self.chat_message_history.add_ai_message(response_text)
+                try:
+                    # 응답이 너무 길면 잘라서 저장
+                    if len(response_text) > 1000:
+                        truncated_text = response_text[:997] + "..."
+                        self.chat_message_history.add_ai_message(truncated_text)
+                    else:
+                        self.chat_message_history.add_ai_message(response_text)
+                except Exception as save_err:
+                    print(f"AI 응답 저장 실패: {save_err}")
+
                 return response_text
+
         except Exception as e:
             error_msg = f"응답 생성 중 오류 발생: {str(e)}"
             print(error_msg)
+            import traceback
+            traceback.print_exc()
             return error_msg
 
     def _load_user_info_from_db(self, session_id):
