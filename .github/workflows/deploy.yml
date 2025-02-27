@@ -23,8 +23,8 @@ jobs:
       - name: Docker build & push to DockerHub
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-          docker build -t "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest" .
-          docker push "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest"
+          docker build -t "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/chatbot:latest" .
+          docker push "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/chatbot:latest"
 
   deploy:
     needs: build-and-push
