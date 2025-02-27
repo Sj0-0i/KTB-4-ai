@@ -1,0 +1,55 @@
+name: CI/CD for FastAPI Chatbot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Debug DOCKERHUB_REPO
+        run: |
+          echo "DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_REPO }}"
+
+      - name: Docker build & push to DockerHub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker build -t "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest" .
+          docker push "$(echo -n ${{ secrets.DOCKERHUB_REPO }})/app-back:latest"
+
+  deploy:
+    needs: build-and-push
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            echo "Stopping existing chatbot container..."
+            docker-compose stop chatbot
+            docker-compose rm -f chatbot
+            
+            echo "Pulling latest image..."
+            docker pull ${{ secrets.DOCKERHUB_REPO }}/app-back:latest
+            
+            echo "Updating .env file..."
+            echo "${{ secrets.ENV_FILE }}" > .env
+            
+            echo "Restarting chatbot services..."
+            docker-compose up -d frontend
+            
+            echo "Waiting for FastAPI to start..."
+            sleep 10
