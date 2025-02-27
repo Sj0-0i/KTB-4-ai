@@ -10,8 +10,9 @@ from typing_extensions import Annotated, TypedDict
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import ChatOpenAI
-import openai
-import os
+import asyncio  # 비동기 처리를 위한 모듈
+import edge_tts
+import io
 
 # 환경 변수 로딩
 load_dotenv()
@@ -100,8 +101,17 @@ class ChatbotModel:
         self.like = like
 
     async def get_stream_response(self, user_id, message):
-        response = await self.get_response(user_id, message)
+        response = self.get_response(user_id, message)
+        yield self.text_to_speech(response)
+        await asyncio.sleep(0.1)
 
-        async for chunk in response:
-            if "choices" in chunk and chunk["choices"]:
-                yield chunk["choices"][0]["delta"]["content"]
+    async def text_to_speech(self, text):
+        """ TTS를 사용하여 텍스트를 음성으로 변환 (Edge TTS) """
+        tts = edge_tts.Communicate(text, "ko-KR-SunHiNeural")  # 한국어 음성 선택
+        mp3_data = io.BytesIO()
+
+        async for chunk in tts.stream():
+            if chunk["type"] == "audio":
+                mp3_data.write(chunk["data"])
+
+        return mp3_data.getvalue()  # MP3 바이너리 데이터 반환

@@ -43,6 +43,7 @@ def setUserData(request: UserData):
 async def chat_stream(websocket: WebSocket):
     await websocket.accept()
     print("Client connected")
+    await websocket.send_text(f"Welcome client : {websocket.client}")
 
     user_id = None  # 첫 번째 메시지에서 user_id를 저장
 
@@ -62,7 +63,7 @@ async def chat_stream(websocket: WebSocket):
                 print(f"Received message: {data}")
 
                 async for chunk in cmodel.get_stream_response(user_id, data):
-                    await websocket.send_text(chunk)
+                    await websocket.send_bytes(chunk)
 
     except Exception as e:
         print(f"WebSocket error: {e}")
