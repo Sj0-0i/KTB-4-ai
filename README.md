@@ -1,10 +1,24 @@
 ## 사용방법: 
-- `http://localhost:3000/chat?text=내 이름은 유주야&user=0000`
-- `http://localhost:3000/chat?text=내 이름이 뭐야&user=0000`
-- `http://localhost:3000/chat?text=내가 산책가기 좋은곳이 있을까&user=0000`
-- `http://localhost:3000/chat?text=내가 할만한 운동은 뭐가 있어?&user=0000`
+###
+POST http://localhost:3000/set_user_info
+Content-Type: application/json
 
-- text: 하고싶은 말
-- uesr=userid값
+{
+  "age": 70, 
+  "like": "운동" 
 
-임시로 post가 아닌 get방식으로 작업해두었습니다
+}
+###
+POST http://localhost:3000/chat
+Content-Type: application/json
+
+{
+  "text": "나의 관심사가 뭐야", 
+  "user": "0000"
+}
+
+- age: number
+- like: string
+- text: string
+- user: string
+
