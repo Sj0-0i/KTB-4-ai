@@ -5,8 +5,8 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # 3. 필요한 파일 복사
-COPY requirements.txt .
-COPY . .
+COPY ../requirements.txt .
+COPY .. .
 
 # 4. 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
