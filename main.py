@@ -40,6 +40,13 @@ DB_NAME = os.getenv("DB_NAME")
 # MySQL 연결 함수
 def get_db_connection():
     try:
+        print("환경변수 확인")
+        print(f"DB_HOST: {DB_HOST}")
+        print(f"DB_PORT: {DB_PORT}")
+        print(f"DB_USER: {DB_USER}")
+        print(f"DB_PASSWORD: {DB_PASSWORD}")
+        print(f"DB_NAME: {DB_NAME}")
+
         conn = pymysql.connect(
             host=DB_HOST,
             port=DB_PORT,
