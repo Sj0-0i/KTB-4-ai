@@ -81,6 +81,10 @@ class UserData(BaseModel):
 #     })
 #
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 @app.post("/chat")
 def chat(request: ChatRequest):
     response = cmodel.get_response(request.userId, request.message)
