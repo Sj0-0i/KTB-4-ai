@@ -57,7 +57,7 @@ jobs:
       # 6. S3에 ZIP 파일 업로드
       - name: Upload ZIP to S3
         run: |
-          aws s3 cp --region ap-northeast-2 ./deploy-back.zip s3://250325-ktblily-bucket/deploy-back.zip
+          aws s3 cp --region ap-northeast-2 ./deploy-back.zip s3://250325-ktblily-bucket-dev/deploy-back.zip
 
       # 7. AWS CodeDeploy 배포 요청
       - name: Deploy to AWS CodeDeploy
@@ -66,4 +66,4 @@ jobs:
             --application-name backend-app-dev \
             --deployment-config-name CodeDeployDefault.AllAtOnce \
             --deployment-group-name backend-group-dev \
-            --s3-location bucket=250325-ktblily-bucket,bundleType=zip,key=deploy-back.zip
+            --s3-location bucket=250325-ktblily-bucket-dev,bundleType=zip,key=deploy-back.zip
