@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMAGE="120569628358.dkr.ecr.ap-northeast-2.amazonaws.com/backend:latest"
+IMAGE="120569628358.dkr.ecr.ap-northeast-2.amazonaws.com/backend-dev:latest"
 CONTAINER_NAME="backend_container"
 
 aws ecr get-login-password --region ap-northeast-2 \

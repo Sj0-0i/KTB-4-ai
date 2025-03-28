@@ -38,9 +38,9 @@ jobs:
           echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           
-          docker build -f docker/Dockerfile -t backend .
-          docker tag backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/backend:latest
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/backend:latest
+          docker build -f docker/Dockerfile -t backend-dev .
+          docker tag backend-dev:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/backend-dev:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/backend-dev:latest
 
       # 4. 쉘 스크립트 실행 권한 부여
       - name: Set execute permissions
@@ -63,7 +63,7 @@ jobs:
       - name: Deploy to AWS CodeDeploy
         run: |
           aws deploy create-deployment \
-            --application-name backend-codedeploy-app \
+            --application-name backend-app-dev \
             --deployment-config-name CodeDeployDefault.AllAtOnce \
-            --deployment-group-name backend-group \
+            --deployment-group-name backend-group-dev \
             --s3-location bucket=250325-ktblily-bucket,bundleType=zip,key=deploy-back.zip
